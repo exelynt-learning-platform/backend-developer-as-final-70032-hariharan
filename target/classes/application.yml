@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: resource-booking-system
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:mysql}
+
+  jpa:
+    hibernate:
+      ddl-auto: ${DDL_AUTO:update}
+    show-sql: ${SHOW_SQL:false}
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+
+server:
+  port: ${SERVER_PORT:8080}
+
+app:
+  jwt:
+    # Base64-encoded HMAC secret. Generate your own for real deployments, e.g.:
+    #   openssl rand -base64 64
+    secret: ${JWT_SECRET:VGhpc0lzQVZlcnlMb25nRGV2ZWxvcG1lbnRPbmx5U2VjcmV0S2V5Rm9ySFMyNTZTaWduaW5nMTIzNDU2Nzg5MA==}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000} # 24 hours
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    com.example.booking: ${LOG_LEVEL:INFO}

@@ -1,0 +1,82 @@
+package com.example.booking.service;
+
+import com.example.booking.dto.ResourceRequest;
+import com.example.booking.dto.ResourceResponse;
+import com.example.booking.exception.ResourceNotFoundException;
+import com.example.booking.repository.ResourceRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class ResourceService {
+
+    private final ResourceRepository resourceRepository;
+
+    public Page<ResourceResponse> getAll(Pageable pageable) {
+        return resourceRepository.findAll(pageable).map(this::toResponse);
+    }
+
+    public ResourceResponse getById(Long id) {
+        return toResponse(findEntity(id));
+    }
+
+    public ResourceResponse create(ResourceRequest request) {
+        com.example.booking.entity.Resource resource = com.example.booking.entity.Resource.builder()
+                .name(request.getName())
+                .type(request.getType())
+                .description(request.getDescription())
+                .location(request.getLocation())
+                .capacity(request.getCapacity())
+                .pricePerHour(request.getPricePerHour())
+                .available(request.getAvailable() == null || request.getAvailable())
+                .build();
+
+        return toResponse(resourceRepository.save(resource));
+    }
+
+    public ResourceResponse update(Long id, ResourceRequest request) {
+        com.example.booking.entity.Resource resource = findEntity(id);
+
+        resource.setName(request.getName());
+        resource.setType(request.getType());
+        resource.setDescription(request.getDescription());
+        resource.setLocation(request.getLocation());
+        resource.setCapacity(request.getCapacity());
+        resource.setPricePerHour(request.getPricePerHour());
+        if (request.getAvailable() != null) {
+            resource.setAvailable(request.getAvailable());
+        }
+
+        return toResponse(resourceRepository.save(resource));
+    }
+
+    public void delete(Long id) {
+        if (!resourceRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Resource not found with id: " + id);
+        }
+        resourceRepository.deleteById(id);
+    }
+
+    com.example.booking.entity.Resource findEntity(Long id) {
+        return resourceRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Resource not found with id: " + id));
+    }
+
+    private ResourceResponse toResponse(com.example.booking.entity.Resource r) {
+        return ResourceResponse.builder()
+                .id(r.getId())
+                .name(r.getName())
+                .type(r.getType())
+                .description(r.getDescription())
+                .location(r.getLocation())
+                .capacity(r.getCapacity())
+                .pricePerHour(r.getPricePerHour())
+                .available(r.isAvailable())
+                .build();
+    }
+}
