@@ -2,6 +2,7 @@ package com.example.booking.exception;
 
 import com.example.booking.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,11 +20,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex,
-                                                            HttpServletRequest request) {
+            HttpServletRequest request) {
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         for (FieldError fe : ex.getBindingResult().getFieldErrors()) {
             fieldErrors.put(fe.getField(), fe.getDefaultMessage());
@@ -43,7 +45,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex,
-                                                              HttpServletRequest request) {
+            HttpServletRequest request) {
         String message = String.format("Parameter '%s' has an invalid value '%s'", ex.getName(), ex.getValue());
         return build(HttpStatus.BAD_REQUEST, "Bad Request", message, request);
     }
@@ -60,7 +62,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InvalidReservationException.class)
     public ResponseEntity<ErrorResponse> handleInvalidReservation(InvalidReservationException ex,
-                                                                    HttpServletRequest request) {
+            HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage(), request);
     }
 
@@ -82,24 +84,26 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex,
-                                                               HttpServletRequest request) {
+            HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "Conflict",
                 "The request could not be completed due to a data conflict (e.g. duplicate value)", request);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex,
+            HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage(), request);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
+        log.error("Unexpected error handling request {}", request.getRequestURI(), ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error",
                 "An unexpected error occurred", request);
     }
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String error, String message,
-                                                 HttpServletRequest request) {
+            HttpServletRequest request) {
         ErrorResponse body = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(status.value())

@@ -2,6 +2,7 @@ package com.example.booking.config;
 
 import com.example.booking.security.JwtAuthenticationFilter;
 import com.example.booking.security.RestAuthEntryPoints;
+import org.springframework.beans.factory.annotation.Value;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,6 +23,8 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 @Configuration
 @EnableWebSecurity
@@ -33,6 +36,9 @@ public class SecurityConfig {
     private final UserDetailsService userDetailsService;
     private final RestAuthEntryPoints.Unauthorized unauthorizedHandler;
     private final RestAuthEntryPoints.Forbidden forbiddenHandler;
+
+    @Value("${app.cors.allowed-origins:http://localhost:3000}")
+    private String allowedOrigins;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -58,7 +64,8 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable()) // stateless JWT API, no browser cookie sessions
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin())) // allows H2 console iframe in the h2 profile
+                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin())) // allows H2 console iframe in
+                                                                                       // the h2 profile
                 .exceptionHandling(eh -> eh
                         .authenticationEntryPoint(unauthorizedHandler)
                         .accessDeniedHandler(forbiddenHandler))
@@ -66,19 +73,19 @@ public class SecurityConfig {
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers(
                                 "/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html",
-                                "/actuator/health", "/h2-console/**"
-                        ).permitAll()
+                                "/actuator/health", "/h2-console/**")
+                        .permitAll()
 
                         // Resources: everyone authenticated can read, only ADMIN can write
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/resources/**").authenticated()
                         .requestMatchers("/api/resources/**").hasRole("ADMIN")
 
                         // Reservations: both roles can hit these endpoints;
-                        // fine-grained "own vs all" filtering happens in the service layer using the JWT principal
+                        // fine-grained "own vs all" filtering happens in the service layer using the
+                        // JWT principal
                         .requestMatchers("/api/reservations/**").authenticated()
 
-                        .anyRequest().authenticated()
-                )
+                        .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
@@ -88,7 +95,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("*"));
+        configuration.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .collect(Collectors.toList()));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
 
