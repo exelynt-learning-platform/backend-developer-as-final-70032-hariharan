@@ -35,15 +35,18 @@ public class ReservationService {
     private final ResourceService resourceService;
 
     /**
-     * Lists reservations honoring RBAC scope: ADMIN sees everything matching the filters,
-     * USER is always additionally scoped to their own reservations regardless of any
-     * caller-supplied parameter, since no userId is ever accepted from the client here.
+     * Lists reservations honoring RBAC scope: ADMIN sees everything matching the
+     * filters,
+     * USER is always additionally scoped to their own reservations regardless of
+     * any
+     * caller-supplied parameter, since no userId is ever accepted from the client
+     * here.
      */
     public Page<ReservationResponse> list(UserPrincipal principal,
-                                           ReservationStatus status,
-                                           BigDecimal minPrice,
-                                           BigDecimal maxPrice,
-                                           Pageable pageable) {
+            ReservationStatus status,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            Pageable pageable) {
         Long scopeUserId = isAdmin(principal) ? null : principal.getId();
 
         var spec = ReservationSpecification.withFilters(scopeUserId, status, minPrice, maxPrice);
@@ -67,7 +70,8 @@ public class ReservationService {
         }
 
         // Identity resolution: a USER can only ever book for themselves, no matter what
-        // userId (if any) was sent in the body. Only ADMIN may book on another user's behalf.
+        // userId (if any) was sent in the body. Only ADMIN may book on another user's
+        // behalf.
         User bookingUser;
         if (isAdmin(principal) && request.getUserId() != null) {
             bookingUser = userRepository.findById(request.getUserId())
@@ -125,9 +129,11 @@ public class ReservationService {
 
     /** ADMIN only; enforced via @PreAuthorize at the controller. */
     public void delete(Long id) {
-        if (!reservationRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Reservation not found with id: " + id);
+        Reservation reservation = findEntity(id);
+        if (reservation.getStatus() != ReservationStatus.CANCELLED) {
+            throw new InvalidReservationException("Only cancelled reservations can be deleted");
         }
+
         reservationRepository.deleteById(id);
     }
 
@@ -140,8 +146,10 @@ public class ReservationService {
 
     private void assertCanView(UserPrincipal principal, Reservation reservation) {
         if (!isAdmin(principal) && !reservation.getUser().getId().equals(principal.getId())) {
-            // 404 rather than 403 here would also be defensible (avoids confirming existence),
-            // but this API surfaces a clear 403 for authenticated-but-not-owner access attempts.
+            // 404 rather than 403 here would also be defensible (avoids confirming
+            // existence),
+            // but this API surfaces a clear 403 for authenticated-but-not-owner access
+            // attempts.
             throw new ForbiddenOperationException("You may only access your own reservations");
         }
     }
@@ -151,7 +159,8 @@ public class ReservationService {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_" + Role.ADMIN.name()));
     }
 
-    private BigDecimal calculatePrice(BigDecimal pricePerHour, java.time.LocalDateTime start, java.time.LocalDateTime end) {
+    private BigDecimal calculatePrice(BigDecimal pricePerHour, java.time.LocalDateTime start,
+            java.time.LocalDateTime end) {
         double hours = Duration.between(start, end).toMinutes() / 60.0;
         return pricePerHour.multiply(BigDecimal.valueOf(hours)).setScale(2, RoundingMode.HALF_UP);
     }

@@ -17,11 +17,17 @@ import java.util.stream.Collectors;
 @Component
 public class JwtUtil {
 
+    private static final String DEFAULT_SECRET = "VGhpc0lzQVZlcnlMb25nRGV2ZWxvcG1lbnRPbmx5U2VjcmV0S2V5Rm9ySFMyNTZTaWduaW5nMTIzNDU2Nzg5MA==";
+
     private final SecretKey signingKey;
     private final long expirationMs;
 
     public JwtUtil(@Value("${app.jwt.secret}") String secret,
-                    @Value("${app.jwt.expiration-ms}") long expirationMs) {
+            @Value("${app.jwt.expiration-ms}") long expirationMs) {
+        if (DEFAULT_SECRET.equals(secret)) {
+            throw new IllegalStateException("The default JWT secret must be replaced before starting the application");
+        }
+
         // Secret must be a Base64-encoded string that decodes to >= 256 bits for HS256
         this.signingKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
         this.expirationMs = expirationMs;
@@ -41,7 +47,8 @@ public class JwtUtil {
                 .claim("roles", roles)
                 .issuedAt(now)
                 .expiration(expiry)
-                .signWith(signingKey) // jjwt picks the strongest HS algorithm the key length supports (HS256 for a 256-bit key)
+                .signWith(signingKey) // jjwt picks the strongest HS algorithm the key length supports (HS256 for a
+                                      // 256-bit key)
                 .compact();
     }
 
