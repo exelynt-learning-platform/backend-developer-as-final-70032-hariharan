@@ -1,31 +1,40 @@
+name: resource-booking-system
+
 services:
-  mysql:
+  resource-booking-mysql:
     image: mysql:8.4
+    container_name: resource-booking-mysql
+    networks:
+      - resource-booking-network
     environment:
       MYSQL_DATABASE: booking_db
       MYSQL_ROOT_PASSWORD: root
     volumes:
-      - mysql-data:/var/lib/mysql
+      - resource-booking-data:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot --silent"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  app:
+  resource-booking-app:
     build: .
+    image: resource-booking-system:latest
+    container_name: resource-booking-app
+    networks:
+      - resource-booking-network
     depends_on:
-      mysql:
+      resource-booking-mysql:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: mysql
-      DB_HOST: mysql
+      DB_HOST: resource-booking-mysql
       DB_PORT: 3306
       DB_NAME: booking_db
       DB_USERNAME: root
       DB_PASSWORD: root
       DDL_AUTO: update
-      JWT_SECRET: ${JWT_SECRET:-VGhpc0lzQVZlcnlMb25nRGV2ZWxvcG1lbnRPbmx5U2VjcmV0S2V5Rm9ySFMyNTZTaWduaW5nMTIzNDU2Nzg5MA==}
+      JWT_SECRET: -VGhpc0lzQVZlcnlMb25nRGV2ZWxvcG1lbnRPbmx5U2VjcmV0S2V5Rm9ySFMyNTZTaWduaW5nMTIzNDU2Nzg5MA==
     ports:
       - "8080:8080"
     healthcheck:
@@ -35,4 +44,9 @@ services:
       retries: 12
 
 volumes:
-  mysql-data:
+  resource-booking-data:
+    name: resource-booking-data
+
+networks:
+  resource-booking-network:
+    name: resource-booking-network
