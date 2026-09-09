@@ -73,7 +73,7 @@ public class SecurityConfig {
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers(
                                 "/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html",
-                                "/actuator/health", "/actuator/info", "/h2-console/**")
+                                "/actuator/health", "/actuator/**", "/h2-console/**")
                         .permitAll()
 
                         // Resources: everyone authenticated can read, only ADMIN can write
