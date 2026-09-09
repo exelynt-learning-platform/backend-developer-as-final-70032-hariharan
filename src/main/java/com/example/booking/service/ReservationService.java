@@ -92,7 +92,8 @@ public class ReservationService {
                 .price(price)
                 .build();
 
-        return toResponse(reservationRepository.save(reservation));
+        Reservation savedReservation = reservationRepository.save(reservation);
+        return toResponse(savedReservation);
     }
 
     /** Full update — ADMIN only; enforced via @PreAuthorize at the controller. */
@@ -124,7 +125,8 @@ public class ReservationService {
         }
 
         reservation.setStatus(ReservationStatus.CANCELLED);
-        return toResponse(reservationRepository.save(reservation));
+        Reservation savedReservation = reservationRepository.save(reservation);
+        return toResponse(savedReservation);
     }
 
     /** ADMIN only; enforced via @PreAuthorize at the controller. */

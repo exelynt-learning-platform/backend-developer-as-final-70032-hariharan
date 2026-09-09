@@ -27,14 +27,16 @@ public class AuthService {
     public LoginResponse login(LoginRequest request) {
         // Delegates to the DaoAuthenticationProvider configured in SecurityConfig,
         // which loads the user via CustomUserDetailsService and checks the BCrypt hash.
-        // Throws BadCredentialsException on mismatch, handled by GlobalExceptionHandler.
+        // Throws BadCredentialsException on mismatch, handled by
+        // GlobalExceptionHandler.
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
 
         UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
 
         @SuppressWarnings("unchecked")
-        List<? extends GrantedAuthority> authorities = (List<? extends GrantedAuthority>) authentication.getAuthorities();
+        List<? extends GrantedAuthority> authorities = (List<? extends GrantedAuthority>) authentication
+                .getAuthorities();
 
         String token = jwtUtil.generateToken(principal.getUsername(), principal.getId(), authorities);
 

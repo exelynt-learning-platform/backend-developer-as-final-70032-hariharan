@@ -23,4 +23,5 @@ class HealthIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(content().json("{\"status\":\"UP\"}"));
     }
+
 }
