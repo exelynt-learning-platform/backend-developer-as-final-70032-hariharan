@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: resource-booking-app
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - resource-booking-app:8080

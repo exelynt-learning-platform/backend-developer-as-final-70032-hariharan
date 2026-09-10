@@ -39,8 +39,8 @@ logging:
 management:
   endpoints:
     web:
-          exposure:
-            include: health,info,metrics,prometheus
+      exposure:
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       probes:
