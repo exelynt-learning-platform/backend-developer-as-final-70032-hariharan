@@ -3,8 +3,12 @@
 A RESTful API for booking resources (rooms, vehicles, equipment) with JWT-based
 authentication and role-based access control (RBAC).
 
-Built with **Spring Boot 3.3**, **Java 17**, **Spring Security**, **JWT**, and
-**MySQL/PostgreSQL** via **Spring Data JPA / Hibernate**.
+Built with **Spring Boot 4.1.1**, **Java 21**, **Spring Security**, **JWT**,
+and profile-driven **H2/MySQL** support via **Spring Data JPA / Hibernate**.
+The project now also uses a typed configuration model for application settings,
+a conditional Redis cache manager only when the active cache profile is truly
+Redis-backed, and an explicit test profile resource that keeps Redis and
+health auto-configuration out of the test path.
 
 ## Features
 
@@ -22,13 +26,13 @@ Built with **Spring Boot 3.3**, **Java 17**, **Spring Security**, **JWT**, and
 - Structured JSON error responses for validation failures, 401s, 403s, 404s, 409s
 - Swagger / OpenAPI UI with a bearer-token "Authorize" flow
 - Seed data: 3 test users, 3 sample resources
-- Works with PostgreSQL, MySQL, or an in-memory H2 profile for zero-setup trials
+- Works with MySQL or an in-memory H2 profile for zero-setup trials
 
 ## Project layout
 
 ```
 src/main/java/com/example/booking/
-  config/          Security, OpenAPI, and data-seeding configuration
+  config/          Security, OpenAPI, typed properties, cache configuration
   controller/      REST controllers (Auth, Resource, Reservation)
   dto/             Request/response payloads with Bean Validation
   entity/          JPA entities (User, Resource, Reservation) + enums
@@ -39,52 +43,54 @@ src/main/java/com/example/booking/
   specification/   JPA Specification for dynamic reservation filtering
 src/main/resources/
   application.yml            base config (profile-driven, all env-overridable)
-  application-postgres.yml   PostgreSQL datasource
-  application-mysql.yml      MySQL datasource
-  application-h2.yml         in-memory H2 for zero-setup local runs
-postman_collection.json      importable Postman collection
+  application-prod.yml       production profile for MySQL + Redis cache
+  application-dev.yml        dev/local profile using a simple cache
+src/test/resources/
+  application.yml            shared test resource covering H2 + no Redis
+  application-test.yml       dedicated test profile-style resource with H2 and simple cache
+postman/                    importable Postman collection and environment files
 .env.example                 template for local environment variables
 ```
 
 ## Prerequisites
 
-- Java 17+
-- Maven 3.8+
-- A running PostgreSQL or MySQL instance (or skip this and use the bundled H2
-  profile for a zero-setup trial)
+- Java 21+
+- Gradle wrapper (or Gradle 8.14+)
+- Optional: a running MySQL instance if you want to switch from the default H2
+  development profile
 
 ## Quick start (H2, no external database needed)
 
+Run the project directly with the Gradle wrapper:
+
 ```bash
-mvn spring-boot:run -Dspring-boot.run.profiles=h2
+./gradlew bootRun
 ```
 
-The app starts on `http://localhost:8080`. An in-memory H2 console is available
-at `http://localhost:8080/h2-console` (JDBC URL `jdbc:h2:mem:booking_db`, user
+On Windows:
+
+```powershell
+./gradlew.bat bootRun
+```
+
+The base config in `application.yml` defaults to the H2 profile when
+`SPRING_PROFILES_ACTIVE` is not set, so a plain local run picks up the
+in-memory H2 datasource automatically. The app starts on
+`http://localhost:8080`. An in-memory H2 console is available at
+`http://localhost:8080/h2-console` (JDBC URL `jdbc:h2:mem:booking_db`, user
 `sa`, empty password) — data resets on every restart.
 
-## Running against PostgreSQL
+## Running with Docker and MySQL
 
-1. Create a database:
-   ```sql
-   CREATE DATABASE booking_db;
-   ```
-2. Set environment variables (copy `.env.example` to `.env` and edit, or export
-   directly):
-   ```bash
-   export SPRING_PROFILES_ACTIVE=postgres
-   export DB_HOST=localhost
-   export DB_PORT=5432
-   export DB_NAME=booking_db
-   export DB_USERNAME=postgres
-   export DB_PASSWORD=postgres
-   ```
-3. Run:
-   ```bash
-   mvn spring-boot:run
-   ```
+The complete application stack uses MySQL 8.4:
 
-## Running against MySQL
+```bash
+docker compose up --build
+```
+
+The API starts at `http://localhost:8080`. Stop it with `docker compose down`.
+
+## Running against an existing MySQL instance
 
 1. Create a database (or let the driver create it — the MySQL profile's JDBC
    URL includes `createDatabaseIfNotExist=true`):
@@ -102,32 +108,81 @@ at `http://localhost:8080/h2-console` (JDBC URL `jdbc:h2:mem:booking_db`, user
    ```
 3. Run:
    ```bash
-   mvn spring-boot:run
+   ./gradlew bootRun
    ```
 
 ## Building a runnable jar
 
 ```bash
-mvn clean package
-java -jar target/resource-booking-system.jar --spring.profiles.active=postgres
+./gradlew clean bootJar
+java -jar build/libs/resource-booking-system.jar --spring.profiles.active=mysql
 ```
 
 ## Environment variables reference
 
-| Variable              | Default (dev only)         | Description                                   |
-|------------------------|-----------------------------|------------------------------------------------|
-| `SPRING_PROFILES_ACTIVE` | `postgres`                | `postgres`, `mysql`, or `h2`                    |
-| `DB_HOST`              | `localhost`                 | Database host                                  |
-| `DB_PORT`              | `5432` (pg) / `3306` (mysql) | Database port                                |
-| `DB_NAME`              | `booking_db`                | Database name                                  |
-| `DB_USERNAME`          | `postgres` / `root`         | Database user                                  |
-| `DB_PASSWORD`          | `postgres` / `root`         | Database password                              |
-| `JWT_SECRET`           | *(dev placeholder — see below)* | Base64-encoded HMAC secret, ≥256 bits      |
-| `JWT_EXPIRATION_MS`    | `86400000` (24h)            | Token lifetime in milliseconds                 |
-| `SERVER_PORT`          | `8080`                      | HTTP port                                      |
-| `DDL_AUTO`             | `update`                    | Hibernate `ddl-auto` mode                      |
-| `SHOW_SQL`             | `false`                     | Log generated SQL                              |
-| `LOG_LEVEL`            | `INFO`                      | Log level for `com.example.booking`            |
+| Variable                 | Default (dev only)              | Description                                   |
+|--------------------------|----------------------------------|-----------------------------------------------|
+| `SPRING_PROFILES_ACTIVE` | `h2`                             | `mysql` or `h2`                               |
+| `DB_HOST`                | `localhost`                      | Database host                                 |
+| `DB_PORT`                | `3306`                           | Database port                                 |
+| `DB_NAME`                | `booking_db`                     | Database name                                 |
+| `DB_USERNAME`            | `root`                           | Database user                                 |
+| `DB_PASSWORD`            | `root`                           | Database password                             |
+| `JWT_SECRET`             | *(dev placeholder — see below)* | Base64-encoded HMAC secret, ≥256 bits         |
+| `JWT_EXPIRATION_MS`      | `86400000` (24h)                 | Token lifetime in milliseconds                |
+| `SERVER_PORT`            | `8080`                           | HTTP port                                     |
+| `DDL_AUTO`               | `update`                         | Hibernate `ddl-auto` mode                     |
+| `SHOW_SQL`               | `false`                          | Log generated SQL                             |
+| `LOG_LEVEL`              | `INFO`                           | Log level for `com.example.booking`           |
+
+## Configuration model and cache profile
+
+The application now binds its application-level properties through a single
+configuration object:
+
+- `AppProperties` in `src/main/java/com/example/booking/config/AppProperties.java`
+- bound with `@ConfigurationPropertiesScan(basePackageClasses = AppProperties.class)`
+- nested sections cover `jwt` and `cors` settings cleanly without scattering
+  `@Value` injections across the codebase
+
+For caching:
+
+- production Redis-backed caching is enabled conditionally through
+  `RedisCacheConfig`
+- the Redis cache manager is created only when `spring.cache.type=redis`
+  is active and a Redis connection factory is available
+- the development/test profiles stay on a simple in-memory cache so the
+  application can run without requiring an external Redis instance
+
+For tests:
+
+- `src/test/resources/application-test.yml` keeps H2 in-memory datasource
+  details and disables the Redis health indicator
+- `spring.autoconfigure.exclude` removes Redis boot auto-configuration from
+  the test classpath
+- `spring.cache.type: simple` keeps the same two cache names used by the app
+  without trying to reach a live Redis server
+
+## Test coverage
+
+Run the Gradle test lifecycle and generate the JaCoCo report:
+
+```bash
+./gradlew clean test
+```
+
+The Gradle test task also activates the dedicated test profile automatically
+with the JVM system property `spring.profiles.active=test` in the shared
+`Test` task configuration.
+
+The HTML JaCoCo report is written to `build/reports/jacoco/test/html/`.
+
+## CI/CD with GitHub Actions
+
+The workflow at `.github/workflows/ci-cd.yml` runs the Gradle test/build
+pipeline, uploads the JaCoCo HTML report, and builds the Docker image on pushes
+and pull requests. The publish phase pushes the image to Docker Hub using
+repository secrets, not GitHub Container Registry.
 
 **Never use the bundled default `JWT_SECRET` in production.** Generate your own:
 
@@ -165,6 +220,23 @@ A ready-to-import Postman collection is included at `postman_collection.json`
 couple of requests that intentionally demonstrate expected `403` responses.
 
 ## API overview
+
+### Authentication and user registration
+
+| Method | Path             | Access       | Description                         |
+|--------|------------------|--------------|-------------------------------------|
+| POST   | `/auth/register` | Public       | Creates a `USER` account            |
+| POST   | `/auth/login`    | Public       | Returns a JWT                       |
+| POST   | `/api/users`     | ADMIN        | Creates a `USER` or `ADMIN` account |
+
+Public registration can never assign the `ADMIN` role. Admin accounts must be
+created by an existing administrator or provisioned by the deployment seed.
+
+```bash
+curl -X POST http://localhost:8080/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"newuser","password":"password123"}'
+```
 
 ### Auth
 
@@ -255,7 +327,7 @@ curl -X POST http://localhost:8080/api/reservations \
 ## Tests
 
 ```bash
-mvn test
+./gradlew test
 ```
 
 Includes a smoke test suite covering successful login, invalid-credential

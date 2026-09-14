@@ -14,8 +14,10 @@ import com.example.booking.exception.ResourceNotFoundException;
 import com.example.booking.repository.ReservationRepository;
 import com.example.booking.repository.UserRepository;
 import com.example.booking.security.UserPrincipal;
-import com.example.booking.specification.ReservationSpecification;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -42,36 +44,46 @@ public class ReservationService {
      * caller-supplied parameter, since no userId is ever accepted from the client
      * here.
      */
-    public Page<ReservationResponse> list(UserPrincipal principal,
+    @Transactional(readOnly = true)
+    public Page<ReservationResponse> list(
+            UserPrincipal principal,
             ReservationStatus status,
             BigDecimal minPrice,
             BigDecimal maxPrice,
             Pageable pageable) {
+
         Long scopeUserId = isAdmin(principal) ? null : principal.getId();
 
-        var spec = ReservationSpecification.withFilters(scopeUserId, status, minPrice, maxPrice);
-        return reservationRepository.findAll(spec, pageable).map(this::toResponse);
+        return reservationRepository
+                .findReservations(
+                        scopeUserId,
+                        status,
+                        minPrice,
+                        maxPrice,
+                        pageable)
+                .map(this::toResponse);
     }
 
+    @Cacheable(value = "reservations", key = "#principal.id + ':' + #id")
+    @Transactional(readOnly = true)
     public ReservationResponse getById(UserPrincipal principal, Long id) {
         Reservation reservation = findEntity(id);
         assertCanView(principal, reservation);
         return toResponse(reservation);
     }
 
+    @CachePut(value = "reservations", key = "#result.id")
     public ReservationResponse create(UserPrincipal principal, ReservationCreateRequest request) {
         if (!request.getEndTime().isAfter(request.getStartTime())) {
             throw new InvalidReservationException("endTime must be after startTime");
         }
 
-        Resource resource = resourceService.findEntity(request.getResourceId());
+        Resource resource = resourceService.findEntityForUpdate(request.getResourceId());
         if (!resource.isAvailable()) {
             throw new InvalidReservationException("Resource is not currently available for booking");
         }
+        assertNoOverlap(resource, request.getStartTime(), request.getEndTime(), null);
 
-        // Identity resolution: a USER can only ever book for themselves, no matter what
-        // userId (if any) was sent in the body. Only ADMIN may book on another user's
-        // behalf.
         User bookingUser;
         if (isAdmin(principal) && request.getUserId() != null) {
             bookingUser = userRepository.findById(request.getUserId())
@@ -92,10 +104,12 @@ public class ReservationService {
                 .price(price)
                 .build();
 
-        return toResponse(reservationRepository.save(reservation));
+        Reservation savedReservation = reservationRepository.save(reservation);
+        return toResponse(savedReservation);
     }
 
     /** Full update — ADMIN only; enforced via @PreAuthorize at the controller. */
+    @CachePut(value = "reservations", key = "#id")
     public ReservationResponse update(Long id, ReservationUpdateRequest request) {
         Reservation reservation = findEntity(id);
 
@@ -103,7 +117,13 @@ public class ReservationService {
             throw new InvalidReservationException("endTime must be after startTime");
         }
 
-        Resource resource = resourceService.findEntity(request.getResourceId());
+        Resource resource = resourceService.findEntityForUpdate(request.getResourceId());
+        if (request.getStatus() != ReservationStatus.CANCELLED && !resource.isAvailable()) {
+            throw new InvalidReservationException("Resource is not currently available for booking");
+        }
+        if (request.getStatus() != ReservationStatus.CANCELLED) {
+            assertNoOverlap(resource, request.getStartTime(), request.getEndTime(), id);
+        }
 
         reservation.setResource(resource);
         reservation.setStartTime(request.getStartTime());
@@ -115,6 +135,7 @@ public class ReservationService {
     }
 
     /** USER may cancel only their own reservation; ADMIN may cancel any. */
+    @CachePut(value = "reservations", key = "#id")
     public ReservationResponse cancel(UserPrincipal principal, Long id) {
         Reservation reservation = findEntity(id);
         assertCanView(principal, reservation);
@@ -124,10 +145,12 @@ public class ReservationService {
         }
 
         reservation.setStatus(ReservationStatus.CANCELLED);
-        return toResponse(reservationRepository.save(reservation));
+        Reservation savedReservation = reservationRepository.save(reservation);
+        return toResponse(savedReservation);
     }
 
     /** ADMIN only; enforced via @PreAuthorize at the controller. */
+    @CacheEvict(value = "reservations", key = "#id")
     public void delete(Long id) {
         Reservation reservation = findEntity(id);
         if (reservation.getStatus() != ReservationStatus.CANCELLED) {
@@ -137,8 +160,6 @@ public class ReservationService {
         reservationRepository.deleteById(id);
     }
 
-    // ---- helpers ----
-
     private Reservation findEntity(Long id) {
         return reservationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Reservation not found with id: " + id));
@@ -146,10 +167,6 @@ public class ReservationService {
 
     private void assertCanView(UserPrincipal principal, Reservation reservation) {
         if (!isAdmin(principal) && !reservation.getUser().getId().equals(principal.getId())) {
-            // 404 rather than 403 here would also be defensible (avoids confirming
-            // existence),
-            // but this API surfaces a clear 403 for authenticated-but-not-owner access
-            // attempts.
             throw new ForbiddenOperationException("You may only access your own reservations");
         }
     }
@@ -157,6 +174,14 @@ public class ReservationService {
     private boolean isAdmin(UserPrincipal principal) {
         return principal.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_" + Role.ADMIN.name()));
+    }
+
+    private void assertNoOverlap(Resource resource, java.time.LocalDateTime startTime,
+            java.time.LocalDateTime endTime, Long reservationId) {
+        if (reservationRepository.existsOverlappingReservation(
+                resource.getId(), startTime, endTime, ReservationStatus.CANCELLED, reservationId)) {
+            throw new InvalidReservationException("Resource is already reserved during the requested time");
+        }
     }
 
     private BigDecimal calculatePrice(BigDecimal pricePerHour, java.time.LocalDateTime start,
