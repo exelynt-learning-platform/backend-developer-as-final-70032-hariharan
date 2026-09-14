@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity // enables @PreAuthorize on controller/service methods
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -73,7 +73,7 @@ public class SecurityConfig {
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers(
                                 "/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html",
-                                "/actuator/health", "/h2-console/**")
+                                "/actuator/health", "/actuator/**", "/h2-console/**")
                         .permitAll()
 
                         // Resources: everyone authenticated can read, only ADMIN can write

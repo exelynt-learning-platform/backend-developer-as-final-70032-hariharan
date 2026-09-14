@@ -4,7 +4,7 @@ A RESTful API for booking resources (rooms, vehicles, equipment) with JWT-based
 authentication and role-based access control (RBAC).
 
 Built with **Spring Boot 3.3**, **Java 17**, **Spring Security**, **JWT**, and
-**MySQL/PostgreSQL** via **Spring Data JPA / Hibernate**.
+**MySQL** via **Spring Data JPA / Hibernate**.
 
 ## Features
 
@@ -22,7 +22,7 @@ Built with **Spring Boot 3.3**, **Java 17**, **Spring Security**, **JWT**, and
 - Structured JSON error responses for validation failures, 401s, 403s, 404s, 409s
 - Swagger / OpenAPI UI with a bearer-token "Authorize" flow
 - Seed data: 3 test users, 3 sample resources
-- Works with PostgreSQL, MySQL, or an in-memory H2 profile for zero-setup trials
+- Works with MySQL or an in-memory H2 profile for zero-setup trials
 
 ## Project layout
 
@@ -39,7 +39,6 @@ src/main/java/com/example/booking/
   specification/   JPA Specification for dynamic reservation filtering
 src/main/resources/
   application.yml            base config (profile-driven, all env-overridable)
-  application-postgres.yml   PostgreSQL datasource
   application-mysql.yml      MySQL datasource
   application-h2.yml         in-memory H2 for zero-setup local runs
 postman_collection.json      importable Postman collection
@@ -50,7 +49,7 @@ postman_collection.json      importable Postman collection
 
 - Java 17+
 - Maven 3.8+
-- A running PostgreSQL or MySQL instance (or skip this and use the bundled H2
+- A running MySQL instance (or skip this and use the bundled H2
   profile for a zero-setup trial)
 
 ## Quick start (H2, no external database needed)
@@ -63,28 +62,17 @@ The app starts on `http://localhost:8080`. An in-memory H2 console is available
 at `http://localhost:8080/h2-console` (JDBC URL `jdbc:h2:mem:booking_db`, user
 `sa`, empty password) — data resets on every restart.
 
-## Running against PostgreSQL
+## Running with Docker and MySQL
 
-1. Create a database:
-   ```sql
-   CREATE DATABASE booking_db;
-   ```
-2. Set environment variables (copy `.env.example` to `.env` and edit, or export
-   directly):
-   ```bash
-   export SPRING_PROFILES_ACTIVE=postgres
-   export DB_HOST=localhost
-   export DB_PORT=5432
-   export DB_NAME=booking_db
-   export DB_USERNAME=postgres
-   export DB_PASSWORD=postgres
-   ```
-3. Run:
-   ```bash
-   mvn spring-boot:run
-   ```
+The complete application stack uses MySQL 8.4:
 
-## Running against MySQL
+```bash
+docker compose up --build
+```
+
+The API starts at `http://localhost:8080`. Stop it with `docker compose down`.
+
+## Running against an existing MySQL instance
 
 1. Create a database (or let the driver create it — the MySQL profile's JDBC
    URL includes `createDatabaseIfNotExist=true`):
@@ -109,25 +97,35 @@ at `http://localhost:8080/h2-console` (JDBC URL `jdbc:h2:mem:booking_db`, user
 
 ```bash
 mvn clean package
-java -jar target/resource-booking-system.jar --spring.profiles.active=postgres
+java -jar target/resource-booking-system.jar --spring.profiles.active=mysql
 ```
 
 ## Environment variables reference
 
 | Variable              | Default (dev only)         | Description                                   |
 |------------------------|-----------------------------|------------------------------------------------|
-| `SPRING_PROFILES_ACTIVE` | `postgres`                | `postgres`, `mysql`, or `h2`                    |
+| `SPRING_PROFILES_ACTIVE` | `mysql`                   | `mysql` or `h2`                                  |
 | `DB_HOST`              | `localhost`                 | Database host                                  |
-| `DB_PORT`              | `5432` (pg) / `3306` (mysql) | Database port                                |
+| `DB_PORT`              | `3306`                      | Database port                                  |
 | `DB_NAME`              | `booking_db`                | Database name                                  |
-| `DB_USERNAME`          | `postgres` / `root`         | Database user                                  |
-| `DB_PASSWORD`          | `postgres` / `root`         | Database password                              |
+| `DB_USERNAME`          | `root`                      | Database user                                  |
+| `DB_PASSWORD`          | `root`                      | Database password                              |
 | `JWT_SECRET`           | *(dev placeholder — see below)* | Base64-encoded HMAC secret, ≥256 bits      |
 | `JWT_EXPIRATION_MS`    | `86400000` (24h)            | Token lifetime in milliseconds                 |
 | `SERVER_PORT`          | `8080`                      | HTTP port                                      |
 | `DDL_AUTO`             | `update`                    | Hibernate `ddl-auto` mode                      |
 | `SHOW_SQL`             | `false`                     | Log generated SQL                              |
 | `LOG_LEVEL`            | `INFO`                      | Log level for `com.example.booking`            |
+
+## Test coverage
+
+Run the integration suite and generate the JaCoCo report:
+
+```bash
+mvn clean verify
+```
+
+Open `target/site/jacoco/index.html` to inspect line and branch coverage.
 
 **Never use the bundled default `JWT_SECRET` in production.** Generate your own:
 

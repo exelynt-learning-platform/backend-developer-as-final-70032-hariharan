@@ -1,0 +1,88 @@
+name: resource-booking-system
+
+services:
+  resource-booking-mysql:
+    image: mysql:8.4
+    container_name: resource-booking-mysql
+    networks:
+      - resource-booking-network
+    environment:
+      MYSQL_DATABASE: booking_db
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - resource-booking-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  resource-booking-app:
+    build: .
+    image: resource-booking-system:latest
+    container_name: resource-booking-app
+    networks:
+      - resource-booking-network
+    depends_on:
+      resource-booking-mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: mysql
+      DB_HOST: resource-booking-mysql
+      DB_PORT: 3306
+      DB_NAME: booking_db
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      DDL_AUTO: update
+      JWT_SECRET: -VGhpc0lzQVZlcnlMb25nRGV2ZWxvcG1lbnRPbmx5U2VjcmV0S2V5Rm9ySFMyNTZTaWduaW5nMTIzNDU2Nzg5MA==
+    ports:
+      - "${API_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  prometheus:
+    image: prom/prometheus:v2.53.5
+    container_name: resource-booking-prometheus
+    networks:
+      - resource-booking-network
+    depends_on:
+      resource-booking-app:
+        condition: service_healthy
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - resource-booking-prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.2.2
+    container_name: resource-booking-grafana
+    networks:
+      - resource-booking-network
+    depends_on:
+      prometheus:
+        condition: service_started
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - resource-booking-grafana-data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+
+volumes:
+  resource-booking-data:
+    name: resource-booking-data
+  resource-booking-prometheus-data:
+    name: resource-booking-prometheus-data
+  resource-booking-grafana-data:
+    name: resource-booking-grafana-data
+
+networks:
+  resource-booking-network:
+    name: resource-booking-network
