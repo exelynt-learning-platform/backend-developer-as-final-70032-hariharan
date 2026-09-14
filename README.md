@@ -40,7 +40,6 @@ src/main/java/com/example/booking/
   repository/      Spring Data JPA repositories
   security/        JWT util, auth filter, UserDetails, entry points
   service/         Business logic (Auth, Resource, Reservation)
-  specification/   JPA Specification for dynamic reservation filtering
 src/main/resources/
   application.yml            base config (profile-driven, all env-overridable)
   application-prod.yml       production profile for MySQL + Redis cache
